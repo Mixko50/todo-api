@@ -1,4 +1,33 @@
-FROM ubuntu:latest
-LABEL authors="a677208"
+FROM cgr.dev/chainguard/go:latest as build
 
-ENTRYPOINT ["top", "-b"]
+WORKDIR /app
+
+COPY go.mod go.sum ./
+
+RUN --mount=type=cache,target=/go/pkg/mod \
+  --mount=type=cache,target=/root/.cache/go-build \
+  go mod download
+
+COPY . .
+
+RUN go build \
+    -ldflags "-linkmode external -extldflags -static" \
+    -o api
+
+FROM cgr.dev/chainguard/static:latest
+
+LABEL version="X.Y.Z"
+
+# USER nonroot
+
+# ENV TINI_VERSION v0.19.0
+# ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-static ./tini
+# # RUN chmod +x ./tini # ถ้าไม่ใช้ docker --init ต้องเปิดอันนี้
+
+COPY --from=build /app/api .
+
+EXPOSE 8080
+
+# ENTRYPOINT ["./tini", "--"] # ถ้าไม่ใช้ docker --init ต้องเปิดอันนี้
+
+CMD ["/api"]
